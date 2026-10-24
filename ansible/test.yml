@@ -1,0 +1,9 @@
+---
+- name: Verify Ansible execution
+  hosts: local
+  gather_facts: false
+
+  tasks:
+    - name: Display Ansible test message
+      ansible.builtin.debug:
+        msg: "Ansible is working inside the container"

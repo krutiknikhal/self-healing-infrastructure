@@ -1,0 +1,36 @@
+---
+- name: Recover NGINX container
+  hosts: local
+  gather_facts: false
+
+  tasks:
+    - name: Check NGINX container state
+      ansible.builtin.command:
+        argv:
+          - docker
+          - inspect
+          - --format={{ '{{.State.Running}}' }}
+          - self-healing-nginx
+      register: nginx_state
+      changed_when: false
+
+    - name: Start NGINX container if stopped
+      ansible.builtin.command:
+        argv:
+          - docker
+          - start
+          - self-healing-nginx
+      when: nginx_state.stdout | trim == "false"
+      register: nginx_start
+      changed_when: nginx_start.rc == 0
+
+    - name: Verify NGINX HTTP availability
+      ansible.builtin.uri:
+        url: http://nginx:80
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: nginx_health
+      retries: 5
+      delay: 2
+      until: nginx_health.status == 200

@@ -1,0 +1,83 @@
+services:
+  nginx:
+    image: nginx:stable-alpine
+    container_name: self-healing-nginx
+    ports:
+      - "127.0.0.1:8081:80"
+    networks:
+      - monitoring-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: self-healing-prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+    - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    networks:
+      - monitoring-network
+
+  blackbox:
+    image: prom/blackbox-exporter:latest
+    container_name: self-healing-blackbox
+    ports:
+      - "127.0.0.1:9115:9115"
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    command:
+      - "--config.file=/etc/blackbox_exporter/config.yml"
+    networks:
+      - monitoring-network
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: self-healing-alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    networks:
+      - monitoring-network
+
+
+  webhook:
+    build:
+      context: ./webhook
+      dockerfile: Dockerfile
+    container_name: self-healing-webhook
+    ports:
+      - "127.0.0.1:5000:5000"
+    environment:
+      RECOVERY_TOKEN: ${RECOVERY_TOKEN:?RECOVERY_TOKEN must be set}
+    networks:
+      - monitoring-network
+
+  recovery:
+    build:
+      context: ./recovery
+      dockerfile: Dockerfile
+    image: self-healing-recovery:test
+    container_name: self-healing-recovery
+    environment:
+      RECOVERY_TOKEN: ${RECOVERY_TOKEN:?RECOVERY_TOKEN must be set}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - monitoring-network
+
+networks:
+  monitoring-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
